@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แดชบอร์ดผู้สอน | GPS Check-in Instructor Dashboard</title>
+  <meta name="description" content="ระบบสรุปรายงานการเช็กชื่อ ตรวจสอบสถานะการเข้าเรียน และส่งออกข้อมูลเป็น CSV">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/instructor.css">
+</head>
+<body>
+  <div class="instructor-container">
+    <!-- Top Navigation -->
+    <header class="nav-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Instructor Dashboard</h1>
+          <span>ระบบแดชบอร์ดผู้สอน &bull; รายงานการเช็กชื่อ</span>
+        </div>
+      </div>
+      <a href="/" class="nav-link" id="nav-to-checkin">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span>ไปหน้าเช็กชื่อนักศึกษา</span>
+      </a>
+    </header>
+
+    <!-- FR-10: Attendance Stats Overview -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon-wrapper primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-title">จำนวนการเช็กชื่อทั้งหมด</span>
+          <span class="stat-value" id="stat-total">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper success">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-title">สำเร็จ (ในห้องเรียน)</span>
+          <span class="stat-value" id="stat-success" style="color: #34d399;">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper danger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-title">อยู่นอกพื้นที่</span>
+          <span class="stat-value" id="stat-out-range" style="color: #fb7185;">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper warning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-title">อัตราความถูกต้อง</span>
+          <span class="stat-value" id="stat-rate" style="color: #fbbf24;">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Classroom Geofence Management Bar -->
+    <section class="config-bar">
+      <div class="config-header">
+        <div class="config-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
+          กำหนดพิกัดห้องเรียนเป้าหมายและรัศมี (Classroom Target Geofence)
+        </div>
+        <div id="config-status-msg" style="display: none; font-size: 12px; font-weight: 600;"></div>
+      </div>
+      <div class="config-inputs-row">
+        <div class="config-col">
+          <label for="target-lat-input">ละติจูดเป้าหมาย (Latitude)</label>
+          <input type="number" step="any" id="target-lat-input" class="config-input" value="{{ config.target_lat }}">
+        </div>
+        <div class="config-col">
+          <label for="target-lng-input">ลองจิจูดเป้าหมาย (Longitude)</label>
+          <input type="number" step="any" id="target-lng-input" class="config-input" value="{{ config.target_lng }}">
+        </div>
+        <div class="config-col" style="max-width: 140px;">
+          <label for="target-radius-input">รัศมีอนุญาต (เมตร)</label>
+          <input type="number" step="1" min="5" max="1000" id="target-radius-input" class="config-input" value="{{ config.radius_m }}">
+        </div>
+        <button type="button" class="btn-secondary" id="use-current-location-btn">
+          📍 ใช้พิกัดปัจจุบันของฉัน
+        </button>
+        <button type="button" class="btn-primary-sm" id="save-config-btn">
+          💾 บันทึกการตั้งค่า
+        </button>
+      </div>
+    </section>
+
+    <!-- Table Toolbar: Search, Filters & Export -->
+    <section class="table-toolbar">
+      <div class="toolbar-left">
+        <div class="search-input-wrapper">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" class="search-input" placeholder="ค้นหารหัสนักศึกษา หรือชื่อ-นามสกุล...">
+        </div>
+
+        <select id="status-filter" class="filter-select">
+          <option value="">-- แสดงสถานะทั้งหมด --</option>
+          <option value="SUCCESS">สำเร็จ (ในห้องเรียน)</option>
+          <option value="OUT_OF_RANGE">อยู่นอกพื้นที่</option>
+        </select>
+
+        <button type="button" class="btn-secondary" id="refresh-btn" title="รีเฟรชข้อมูล">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          รีเฟรช
+        </button>
+      </div>
+
+      <div class="toolbar-right">
+        <button type="button" class="btn-secondary" id="reset-btn" style="color: #fb7185;" title="ล้างประวัติ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          ล้างประวัติ
+        </button>
+
+        <!-- FR-11: Export Data to CSV -->
+        <a href="#" class="btn-success" id="export-csv-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          ส่งออกเป็นไฟล์ CSV
+        </a>
+      </div>
+    </section>
+
+    <!-- FR-09: Summary Table -->
+    <main class="table-card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 60px;">ลำดับ</th>
+              <th style="width: 140px;">รหัสนักศึกษา</th>
+              <th>ชื่อ - นามสกุล</th>
+              <th style="width: 130px;">ระยะห่าง</th>
+              <th style="width: 150px;">สถานะการเข้าเรียน</th>
+              <th style="width: 180px;">พิกัดส่งมา (Lat, Lng)</th>
+              <th style="width: 170px;">เวลาที่บันทึก</th>
+            </tr>
+          </thead>
+          <tbody id="records-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">
+                กำลังโหลดข้อมูล...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <footer class="page-footer">
+      <p>GPS Check-in &bull; Instructor Dashboard &bull; Export to CSV รองรับภาษาไทยสมบูรณ์</p>
+    </footer>
+  </div>
+
+  <script src="/static/js/instructor.js"></script>
+</body>
+</html>
