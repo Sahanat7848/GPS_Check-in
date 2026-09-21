@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>แดชบอร์ดผู้สอน | GPS Check-in Instructor Dashboard</title>
-  <meta name="description" content="ระบบสรุปรายงานการเช็กชื่อ ตรวจสอบสถานะการเข้าเรียน และส่งออกข้อมูลเป็น CSV">
+  <meta name="description" content="ระบบจัดการรายวิชา สรุปรายงานการเช็กชื่อ ตรวจสอบสถานะการเข้าเรียน และส่งออกข้อมูลเป็น CSV">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -24,7 +24,7 @@
         </div>
         <div class="brand-text">
           <h1>Instructor Dashboard</h1>
-          <span>ระบบแดชบอร์ดผู้สอน &bull; รายงานการเช็กชื่อ</span>
+          <span>ระบบแดชบอร์ดผู้สอน &bull; แยกรายวิชาตามลิงก์</span>
         </div>
       </div>
       <a href="/" class="nav-link" id="nav-to-checkin">
@@ -76,34 +76,54 @@
       </div>
     </section>
 
-    <!-- Classroom Geofence Management Bar -->
-    <section class="config-bar">
-      <div class="config-header">
-        <div class="config-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
-          กำหนดพิกัดห้องเรียนเป้าหมายและรัศมี (Classroom Target Geofence)
+    <!-- Multi-Course Management Section -->
+    <section class="courses-section">
+      <div class="section-header-row">
+        <div class="section-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          รายวิชาและลิงก์สำหรับส่งให้นักศึกษา (Courses & Check-in Links)
         </div>
-        <div id="config-status-msg" style="display: none; font-size: 12px; font-weight: 600;"></div>
+        <button type="button" class="btn-primary-sm" id="toggle-add-course-btn">
+          ➕ เพิ่มรายวิชาใหม่
+        </button>
       </div>
-      <div class="config-inputs-row">
-        <div class="config-col">
-          <label for="target-lat-input">ละติจูดเป้าหมาย (Latitude)</label>
-          <input type="number" step="any" id="target-lat-input" class="config-input" value="{{ config.target_lat }}">
+
+      <!-- Add Course Form (Expandable) -->
+      <div class="add-course-panel" id="add-course-panel">
+        <div class="config-title" style="margin-bottom: 12px;">สร้างรายวิชาใหม่และกำหนดพิกัดห้องเรียน</div>
+        <div class="config-inputs-row">
+          <div class="config-col" style="max-width: 140px;">
+            <label for="new-course-code">รหัสวิชา (Code)</label>
+            <input type="text" id="new-course-code" class="config-input" placeholder="เช่น CS201">
+          </div>
+          <div class="config-col" style="min-width: 200px;">
+            <label for="new-course-name">ชื่อรายวิชา (Course Name)</label>
+            <input type="text" id="new-course-name" class="config-input" placeholder="เช่น การเขียนโปรแกรมโครงสร้างข้อมูล">
+          </div>
+          <div class="config-col">
+            <label for="new-course-lat">ละติจูด (Latitude)</label>
+            <input type="number" step="any" id="new-course-lat" class="config-input" value="13.736717">
+          </div>
+          <div class="config-col">
+            <label for="new-course-lng">ลองจิจูด (Longitude)</label>
+            <input type="number" step="any" id="new-course-lng" class="config-input" value="100.533100">
+          </div>
+          <div class="config-col" style="max-width: 120px;">
+            <label for="new-course-radius">รัศมี (เมตร)</label>
+            <input type="number" step="1" min="10" max="1000" id="new-course-radius" class="config-input" value="100">
+          </div>
+          <button type="button" class="btn-secondary" id="use-my-gps-new-course">
+            📍 ใช้พิกัดปัจจุบัน
+          </button>
+          <button type="button" class="btn-success" id="submit-new-course-btn">
+            บันทึกรายวิชา
+          </button>
         </div>
-        <div class="config-col">
-          <label for="target-lng-input">ลองจิจูดเป้าหมาย (Longitude)</label>
-          <input type="number" step="any" id="target-lng-input" class="config-input" value="{{ config.target_lng }}">
-        </div>
-        <div class="config-col" style="max-width: 140px;">
-          <label for="target-radius-input">รัศมีอนุญาต (เมตร)</label>
-          <input type="number" step="1" min="5" max="1000" id="target-radius-input" class="config-input" value="{{ config.radius_m }}">
-        </div>
-        <button type="button" class="btn-secondary" id="use-current-location-btn">
-          📍 ใช้พิกัดปัจจุบันของฉัน
-        </button>
-        <button type="button" class="btn-primary-sm" id="save-config-btn">
-          💾 บันทึกการตั้งค่า
-        </button>
+      </div>
+
+      <!-- Course Cards Container -->
+      <div class="course-cards-grid" id="course-cards-container">
+        <!-- Rendered dynamically by JavaScript -->
       </div>
     </section>
 
@@ -115,8 +135,15 @@
           <input type="text" id="search-input" class="search-input" placeholder="ค้นหารหัสนักศึกษา หรือชื่อ-นามสกุล...">
         </div>
 
+        <!-- Filter by Course -->
+        <select id="course-filter" class="filter-select">
+          <option value="">-- ทุกรายวิชา (All Courses) --</option>
+          <!-- Options populated dynamically -->
+        </select>
+
+        <!-- Filter by Status -->
         <select id="status-filter" class="filter-select">
-          <option value="">-- แสดงสถานะทั้งหมด --</option>
+          <option value="">-- สถานะทั้งหมด --</option>
           <option value="SUCCESS">สำเร็จ (ในห้องเรียน)</option>
           <option value="OUT_OF_RANGE">อยู่นอกพื้นที่</option>
         </select>
@@ -147,18 +174,19 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ลำดับ</th>
-              <th style="width: 140px;">รหัสนักศึกษา</th>
+              <th style="width: 50px;">ลำดับ</th>
+              <th style="width: 100px;">วิชา</th>
+              <th style="width: 130px;">รหัสนักศึกษา</th>
               <th>ชื่อ - นามสกุล</th>
-              <th style="width: 130px;">ระยะห่าง</th>
+              <th style="width: 120px;">ระยะห่าง</th>
               <th style="width: 150px;">สถานะการเข้าเรียน</th>
-              <th style="width: 180px;">พิกัดส่งมา (Lat, Lng)</th>
-              <th style="width: 170px;">เวลาที่บันทึก</th>
+              <th style="width: 170px;">พิกัดส่งมา (Lat, Lng)</th>
+              <th style="width: 160px;">เวลาที่บันทึก</th>
             </tr>
           </thead>
           <tbody id="records-tbody">
             <tr>
-              <td colspan="7" class="empty-state">
+              <td colspan="8" class="empty-state">
                 กำลังโหลดข้อมูล...
               </td>
             </tr>
@@ -168,7 +196,7 @@
     </main>
 
     <footer class="page-footer">
-      <p>GPS Check-in &bull; Instructor Dashboard &bull; Export to CSV รองรับภาษาไทยสมบูรณ์</p>
+      <p>GPS Check-in &bull; แยกรายวิชาตามลิงก์เฉพาะ &bull; Export to CSV รองรับภาษาไทยสมบูรณ์</p>
     </footer>
   </div>
 

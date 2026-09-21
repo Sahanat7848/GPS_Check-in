@@ -1,4 +1,4 @@
-// GPS Check-in Client-side Script
+// GPS Check-in Client-side Script (Multi-Course Aware)
 document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   const form = document.getElementById('checkin-form');
@@ -27,10 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentCoordinates = null;
   let isSimulated = false;
 
-  // Classroom Target Config (Injected from HTML or fetched)
-  const targetLat = window.CLASSROOM_CONFIG?.target_lat || 13.736717;
-  const targetLng = window.CLASSROOM_CONFIG?.target_lng || 100.533100;
-  const targetRadius = window.CLASSROOM_CONFIG?.radius_m || 100.0;
+  // Active Course Information
+  const courseCode = window.CURRENT_COURSE?.course_code || 'CS101';
+  const courseName = window.CURRENT_COURSE?.course_name || '';
+  const targetLat = window.CURRENT_COURSE?.target_lat || 13.736717;
+  const targetLng = window.CURRENT_COURSE?.target_lng || 100.533100;
+  const targetRadius = window.CURRENT_COURSE?.radius_m || 100.0;
 
   // Initialize: request Geolocation automatically
   requestGeolocation();
@@ -116,13 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Refresh GPS button listener
   refreshGpsBtn.addEventListener('click', (e) => {
     e.preventDefault();
     requestGeolocation();
   });
 
-  // FR-02 & FR-03: Form Submission via Fetch POST
+  // FR-02 & FR-03: Form Submission with course_code
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -151,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hideFeedback();
 
     const payload = {
+      course_code: courseCode,
       student_id: studentId,
       name: studentName,
       latitude: currentCoordinates.latitude,
@@ -158,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const startTime = performance.now();
       const response = await fetch('/api/checkin', {
         method: 'POST',
         headers: {
@@ -168,8 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       const data = await response.json();
-      const durationMs = Math.round(performance.now() - startTime);
-      console.log(`Check-in response received in ${durationMs}ms`);
 
       // FR-04: Immediate Feedback & Status
       if (response.status === 200) {
@@ -178,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
           radarCore.className = 'radar-core success';
           showFeedback(
             'success',
-            'เช็กชื่อสำเร็จ! (In Range)',
+            `เช็กชื่อวิชา ${data.course_code} สำเร็จ!`,
             `บันทึกข้อมูลเวลาเรียบร้อยแล้ว คุณอยู่ห่างจากห้องเรียน ${data.distance_m} เมตร (กำหนดไม่เกิน ${data.radius_m} ม.)`,
             data.distance_m
           );
@@ -187,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
           radarCore.className = 'radar-core danger';
           showFeedback(
             'danger',
-            'อยู่นอกพื้นที่เช็กชื่อ! (Out of Range)',
+            `อยู่นอกพื้นที่เช็กชื่อวิชา ${data.course_code}!`,
             `ระยะห่างของคุณคือ ${data.distance_m} เมตร ซึ่งเกินกว่ารัศมีที่อนุญาต (${data.radius_m} เมตร) กรุณาเข้าไปในห้องเรียนแล้วลองใหม่`,
             data.distance_m
           );
@@ -198,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showFeedback(
           'warning',
           'เคยเช็กชื่อไปแล้ว (Duplicate)',
-          data.message || 'รหัสนักศึกษานี้ได้เช็กชื่อสำเร็จไปแล้วในรอบเวลานี้'
+          data.message || `รหัสนักศึกษานี้ได้เช็กชื่อวิชา ${courseCode} สำเร็จไปแล้วในรอบเวลานี้`
         );
       } else {
         // Server error or validation error
@@ -220,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
       submitText.textContent = 'กำลังตรวจสอบพิกัด...';
     } else {
       submitSpinner.style.display = 'none';
-      submitText.textContent = 'กดเช็กชื่อเข้าเรียน';
+      submitText.textContent = `เช็กชื่อเข้าเรียนวิชา ${courseCode}`;
     }
   }
 
@@ -236,7 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
       distanceHighlight.style.display = 'none';
     }
 
-    // Set appropriate SVG icon
     if (type === 'success') {
       feedbackIcon.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
     } else if (type === 'danger') {
@@ -253,13 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
     feedbackCard.style.display = 'none';
   }
 
-  // Preset Simulation Handlers
-  // 1 degree latitude ~ 111,320 meters
-  // 0.00010 deg ~ 11.1 meters
-  // 0.00045 deg ~ 50 meters
-  // 0.00076 deg ~ 85 meters
-  // 0.00300 deg ~ 334 meters
-  // 0.01000 deg ~ 1,113 meters
+  // Preset Simulation Handlers (Relative to the course's target location)
   window.setSimulationPreset = function(type) {
     let latOffset = 0;
     let lngOffset = 0;
@@ -269,17 +261,17 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'classroom_inside': // ~15m (SUCCESS)
         latOffset = 0.00012;
         lngOffset = 0.00008;
-        desc = 'จำลอง: นั่งในห้องเรียน (~15 ม.)';
+        desc = `จำลอง: ในห้องเรียนวิชา ${courseCode} (~15 ม.)`;
         break;
       case 'classroom_front': // ~55m (SUCCESS)
         latOffset = 0.00040;
         lngOffset = 0.00025;
-        desc = 'จำลอง: บริเวณหน้าห้องเรียน (~55 ม.)';
+        desc = `จำลอง: หน้าห้องเรียนวิชา ${courseCode} (~55 ม.)`;
         break;
       case 'building_lobby': // ~88m (SUCCESS)
         latOffset = 0.00065;
         lngOffset = 0.00050;
-        desc = 'จำลอง: หน้าตึกเรียน (~88 ม.)';
+        desc = 'จำลอง: ล็อบบี้ตึก (~88 ม.)';
         break;
       case 'cafeteria': // ~340m (OUT OF RANGE)
         latOffset = 0.0028;
@@ -289,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'dormitory': // ~1.2km (OUT OF RANGE)
         latOffset = 0.0105;
         lngOffset = 0.0040;
-        desc = 'จำลอง: หอพักนักศึกษา (~1.2 กม.)';
+        desc = 'จำลอง: หอพัก (~1.2 กม.)';
         break;
       default:
         latOffset = 0;

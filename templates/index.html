@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ระบบเช็กชื่อเข้าเรียนด้วยพิกัด GPS | GPS Check-in</title>
-  <meta name="description" content="ระบบเช็กชื่อเข้าเรียนด้วยพิกัดตำแหน่งจริง (HTML5 Geolocation & Geofencing) ป้องกันการเช็กชื่อนอกพื้นที่">
+  <title>เช็กชื่อเข้าเรียน {{ course.course_code if course else '' }} | GPS Check-in</title>
+  <meta name="description" content="ระบบเช็กชื่อเข้าเรียนตามรายวิชาด้วยพิกัดตำแหน่งจริง (HTML5 Geolocation & Geofencing)">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -34,17 +34,34 @@
 
     <!-- Main Card -->
     <main class="glass-card">
+      <!-- Active Course Badge & Switcher -->
+      <section class="course-badge-box">
+        <div class="course-badge-info">
+          <span class="course-code-pill">{{ course.course_code }}</span>
+          <div class="course-name-text">{{ course.course_name }}</div>
+        </div>
+        {% if all_courses and all_courses|length > 1 %}
+        <select class="course-switch-select" onchange="window.location.href='/c/' + this.value">
+          {% for c in all_courses %}
+          <option value="{{ c.course_code }}" {% if c.course_code == course.course_code %}selected{% endif %}>
+            {{ c.course_code }}
+          </option>
+          {% endfor %}
+        </select>
+        {% endif %}
+      </section>
+
       <!-- Target Classroom Info Banner -->
       <div class="classroom-banner">
         <div class="classroom-meta">
-          <span class="classroom-title">ห้องเรียนเป้าหมาย</span>
+          <span class="classroom-title">ห้องเรียนวิชานี้</span>
           <span class="classroom-coords" style="font-family: monospace; font-size: 11px; color: var(--text-muted);">
-            {{ "%.5f"|format(config.target_lat) }}, {{ "%.5f"|format(config.target_lng) }}
+            {{ "%.5f"|format(course.target_lat) }}, {{ "%.5f"|format(course.target_lng) }}
           </span>
         </div>
         <div class="classroom-radius">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-          รัศมี {{ config.radius_m|round|int }} ม.
+          รัศมี {{ course.radius_m|round|int }} ม.
         </div>
       </div>
 
@@ -87,6 +104,8 @@
 
       <!-- FR-02 & FR-03: Input Form -->
       <form id="checkin-form" novalidate>
+        <input type="hidden" id="course_code" name="course_code" value="{{ course.course_code }}">
+        
         <div class="form-group">
           <label for="student_id" class="form-label">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><line x1="15" y1="8" x2="17" y2="8"/><line x1="15" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
@@ -127,7 +146,7 @@
         <!-- Submit Button -->
         <button type="submit" class="btn-submit" id="submit-btn" disabled>
           <div class="spinner" id="submit-spinner"></div>
-          <span id="submit-text">กดเช็กชื่อเข้าเรียน</span>
+          <span id="submit-text">เช็กชื่อเข้าเรียนวิชา {{ course.course_code }}</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </button>
       </form>
@@ -152,7 +171,7 @@
         <div class="presets-header">
           <span class="presets-title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            ทดสอบพิกัดจำลอง (Test GPS Presets)
+            ทดสอบพิกัดจำลองวิชานี้ (GPS Presets)
           </span>
         </div>
         <div class="preset-chip-list">
@@ -176,12 +195,12 @@
     </main>
 
     <footer class="page-footer">
-      <p>GPS Check-in System &bull; รองรับ HTML5 Geolocation API บน HTTPS / Localhost</p>
+      <p>GPS Check-in System &bull; ลิงก์เฉพาะวิชา {{ course.course_code }}</p>
     </footer>
   </div>
 
   <script>
-    window.CLASSROOM_CONFIG = {{ config | tojson }};
+    window.CURRENT_COURSE = {{ course | tojson }};
   </script>
   <script src="/static/js/checkin.js"></script>
 </body>

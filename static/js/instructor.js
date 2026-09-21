@@ -1,8 +1,9 @@
-// Instructor Dashboard Logic
+// Instructor Dashboard Logic (Multi-Course Support)
 document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
   const recordsTableBody = document.getElementById('records-tbody');
   const searchInput = document.getElementById('search-input');
+  const courseFilter = document.getElementById('course-filter');
   const statusFilter = document.getElementById('status-filter');
   const refreshBtn = document.getElementById('refresh-btn');
   const exportCsvBtn = document.getElementById('export-csv-btn');
@@ -14,17 +15,195 @@ document.addEventListener('DOMContentLoaded', () => {
   const outRangeCountEl = document.getElementById('stat-out-range');
   const rateEl = document.getElementById('stat-rate');
   
-  // Config form elements
-  const configLatInput = document.getElementById('target-lat-input');
-  const configLngInput = document.getElementById('target-lng-input');
-  const configRadiusInput = document.getElementById('target-radius-input');
-  const saveConfigBtn = document.getElementById('save-config-btn');
-  const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
-  const configStatusMsg = document.getElementById('config-status-msg');
+  // Course Management Elements
+  const courseCardsContainer = document.getElementById('course-cards-container');
+  const toggleAddCourseBtn = document.getElementById('toggle-add-course-btn');
+  const addCoursePanel = document.getElementById('add-course-panel');
+  const submitNewCourseBtn = document.getElementById('submit-new-course-btn');
+  const useMyGpsBtn = document.getElementById('use-my-gps-new-course');
 
   // Initial Load
-  loadConfig();
+  loadCourses();
   loadRecords();
+
+  // Toggle Add Course Form
+  toggleAddCourseBtn.addEventListener('click', () => {
+    const isHidden = addCoursePanel.style.display === 'none' || !addCoursePanel.style.display;
+    addCoursePanel.style.display = isHidden ? 'block' : 'none';
+    toggleAddCourseBtn.textContent = isHidden ? '✕ ปิดฟอร์ม' : '➕ เพิ่มรายวิชาใหม่';
+  });
+
+  // Use My GPS for new course
+  useMyGpsBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      alert('เบราว์เซอร์ไม่รองรับ Geolocation');
+      return;
+    }
+    useMyGpsBtn.textContent = 'กำลังดึงพิกัด...';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        document.getElementById('new-course-lat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('new-course-lng').value = pos.coords.longitude.toFixed(6);
+        useMyGpsBtn.textContent = '📍 ใช้พิกัดปัจจุบัน';
+      },
+      (err) => {
+        useMyGpsBtn.textContent = '📍 ใช้พิกัดปัจจุบัน';
+        alert('ไม่สามารถอ่านพิกัดได้: ' + err.message);
+      },
+      { enableHighAccuracy: true }
+    );
+  });
+
+  // Submit New Course
+  submitNewCourseBtn.addEventListener('click', async () => {
+    const code = document.getElementById('new-course-code').value.trim();
+    const name = document.getElementById('new-course-name').value.trim();
+    const lat = parseFloat(document.getElementById('new-course-lat').value);
+    const lng = parseFloat(document.getElementById('new-course-lng').value);
+    const radius = parseFloat(document.getElementById('new-course-radius').value);
+
+    if (!code || !name) {
+      alert('กรุณาระบุรหัสวิชาและชื่อวิชาให้ครบถ้วน');
+      return;
+    }
+    if (isNaN(lat) || isNaN(lng) || isNaN(radius)) {
+      alert('กรุณาระบุพิกัดและรัศมีเป็นตัวเลขที่ถูกต้อง');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_code: code,
+          course_name: name,
+          target_lat: lat,
+          target_lng: lng,
+          radius_m: radius
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        document.getElementById('new-course-code').value = '';
+        document.getElementById('new-course-name').value = '';
+        addCoursePanel.style.display = 'none';
+        toggleAddCourseBtn.textContent = '➕ เพิ่มรายวิชาใหม่';
+        loadCourses();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการสร้างรายวิชา');
+      }
+    } catch (err) {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+  });
+
+  // Load and Render Course Cards
+  async function loadCourses() {
+    try {
+      const res = await fetch('/api/courses');
+      const data = await res.json();
+      if (data.success) {
+        renderCourseCards(data.courses);
+        populateCourseFilter(data.courses);
+      }
+    } catch (err) {
+      console.error('Failed to load courses:', err);
+    }
+  }
+
+  function renderCourseCards(courses) {
+    if (!courses || courses.length === 0) {
+      courseCardsContainer.innerHTML = `<div style="color: var(--text-dim); padding: 12px;">ยังไม่มีรายวิชาในระบบ</div>`;
+      return;
+    }
+
+    const origin = window.location.origin;
+
+    courseCardsContainer.innerHTML = courses.map(c => {
+      const checkinUrl = `${origin}/c/${c.course_code}`;
+      return `
+        <div class="course-card">
+          <div class="course-card-top">
+            <div>
+              <span class="course-code-tag">${escapeHtml(c.course_code)}</span>
+              <div class="course-card-name">${escapeHtml(c.course_name)}</div>
+            </div>
+            <button type="button" class="btn-secondary" style="height: 28px; padding: 2px 8px; font-size: 11px; color: #fb7185;" onclick="window.deleteCourse('${escapeHtml(c.course_code)}')">
+              ลบ
+            </button>
+          </div>
+
+          <div class="course-card-meta">
+            <span>📍 พิกัดห้อง: <code>${c.target_lat.toFixed(5)}, ${c.target_lng.toFixed(5)}</code></span>
+            <span>🎯 รัศมีอนุญาต: <strong>${Math.round(c.radius_m)} เมตร</strong></span>
+          </div>
+
+          <div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 600;">🔗 ลิงก์สำหรับส่งให้นักศึกษา:</div>
+            <div class="course-link-box">
+              <span class="course-link-text">${checkinUrl}</span>
+              <button type="button" class="btn-copy" onclick="window.copyCourseLink(this, '${checkinUrl}')">
+                📋 คัดลอก
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <a href="/c/${c.course_code}" target="_blank" class="nav-link" style="font-size: 11px; padding: 4px 10px;">
+              🌐 เปิดหน้าเช็กชื่อ
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function populateCourseFilter(courses) {
+    const currentVal = courseFilter.value;
+    courseFilter.innerHTML = `<option value="">-- ทุกรายวิชา (All Courses) --</option>`;
+    courses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.course_code;
+      opt.textContent = `${c.course_code} - ${c.course_name}`;
+      if (c.course_code === currentVal) opt.selected = true;
+      courseFilter.appendChild(opt);
+    });
+  }
+
+  // Global helper to copy link to clipboard
+  window.copyCourseLink = function(btn, url) {
+    navigator.clipboard.writeText(url).then(() => {
+      const originalText = btn.innerHTML;
+      btn.classList.add('copied');
+      btn.innerHTML = 'คัดลอกแล้ว! ✅';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = originalText;
+      }, 2000);
+    }).catch(err => {
+      prompt('คัดลอกลิงก์ด้านล่างนี้ได้เลยครับ:', url);
+    });
+  };
+
+  // Global helper to delete course
+  window.deleteCourse = async function(courseCode) {
+    if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายวิชา ${courseCode}?`)) {
+      try {
+        const res = await fetch(`/api/courses/${courseCode}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          loadCourses();
+          loadRecords();
+        } else {
+          alert(data.error || 'ไม่สามารถลบรายวิชาได้');
+        }
+      } catch (err) {
+        alert('เกิดข้อผิดพลาดในการลบ');
+      }
+    }
+  };
 
   // Search and Filter Events
   let debounceTimer = null;
@@ -35,20 +214,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 300);
   });
 
+  courseFilter.addEventListener('change', () => {
+    loadRecords();
+  });
+
   statusFilter.addEventListener('change', () => {
     loadRecords();
   });
 
   refreshBtn.addEventListener('click', () => {
     loadRecords();
+    loadCourses();
   });
 
-  // Export CSV handler (FR-11)
+  // Export CSV handler (FR-11 with Course filtering)
   exportCsvBtn.addEventListener('click', (e) => {
     e.preventDefault();
+    const course = courseFilter.value;
     const status = statusFilter.value;
     const search = searchInput.value.trim();
     let url = '/api/export-csv?';
+    if (course) url += `course=${encodeURIComponent(course)}&`;
     if (status) url += `status=${encodeURIComponent(status)}&`;
     if (search) url += `search=${encodeURIComponent(search)}`;
     window.location.href = url;
@@ -75,9 +261,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load Records & Stats (FR-09, FR-10)
   async function loadRecords() {
     try {
+      const course = courseFilter.value;
       const status = statusFilter.value;
       const search = searchInput.value.trim();
       let url = '/api/records?';
+      if (course) url += `course=${encodeURIComponent(course)}&`;
       if (status) url += `status=${encodeURIComponent(status)}&`;
       if (search) url += `search=${encodeURIComponent(search)}`;
 
@@ -92,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to load records:', err);
       recordsTableBody.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง
           </td>
         </tr>
@@ -112,16 +300,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!records || records.length === 0) {
       recordsTableBody.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">
+          <td colspan="8" class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/></svg>
-            <div>ยังไม่มีข้อมูลการเช็กชื่อ</div>
+            <div>ยังไม่มีข้อมูลการเช็กชื่อในรายวิชานี้</div>
           </td>
         </tr>
       `;
       return;
     }
 
-    recordsTableBody.innerHTML = records.map((r, index) => {
+    recordsTableBody.innerHTML = records.map((r) => {
       const isSuccess = r.status === 'SUCCESS';
       const statusBadge = isSuccess
         ? `<span class="status-badge success">
@@ -135,10 +323,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const distTag = `<span class="distance-tag ${isSuccess ? 'success' : 'danger'}">${r.distance_m.toFixed(1)} ม.</span>`;
       const timeStr = r.created_at_local || r.created_at;
+      const courseTag = `<span class="course-code-tag" style="font-size: 11px;">${escapeHtml(r.course_code || '-')}</span>`;
 
       return `
         <tr>
           <td style="color: var(--text-dim); font-size: 11px;">#${r.id}</td>
+          <td>${courseTag}</td>
           <td><strong>${escapeHtml(r.student_id)}</strong></td>
           <td>${escapeHtml(r.student_name)}</td>
           <td>${distTag}</td>
@@ -150,80 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  // Configuration management
-  async function loadConfig() {
-    try {
-      const res = await fetch('/api/config');
-      const cfg = await res.json();
-      if (cfg) {
-        configLatInput.value = cfg.target_lat;
-        configLngInput.value = cfg.target_lng;
-        configRadiusInput.value = cfg.radius_m;
-      }
-    } catch (err) {
-      console.error('Failed to load config:', err);
-    }
-  }
-
-  saveConfigBtn.addEventListener('click', async () => {
-    const lat = parseFloat(configLatInput.value);
-    const lng = parseFloat(configLngInput.value);
-    const radius = parseFloat(configRadiusInput.value);
-
-    if (isNaN(lat) || isNaN(lng) || isNaN(radius)) {
-      showConfigMessage('danger', 'กรุณากรอกข้อมูลตัวเลขให้ถูกต้อง');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_lat: lat, target_lng: lng, radius_m: radius })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showConfigMessage('success', 'บันทึกพิกัดห้องเรียนและรัศมีเรียบร้อยแล้ว');
-      } else {
-        showConfigMessage('danger', data.error || 'เกิดข้อผิดพลาดในการบันทึก');
-      }
-    } catch (err) {
-      showConfigMessage('danger', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
-    }
-  });
-
-  useCurrentLocationBtn.addEventListener('click', () => {
-    if (!navigator.geolocation) {
-      alert('เบราว์เซอร์ไม่รองรับการดึงพิกัด Geolocation');
-      return;
-    }
-
-    useCurrentLocationBtn.textContent = 'กำลังดึงพิกัด...';
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        configLatInput.value = pos.coords.latitude.toFixed(6);
-        configLngInput.value = pos.coords.longitude.toFixed(6);
-        useCurrentLocationBtn.textContent = '📍 ใช้พิกัดปัจจุบันของฉัน';
-        showConfigMessage('success', 'ดึงพิกัดปัจจุบันของคุณแล้ว อย่าลืมกด "บันทึกการตั้งค่า"');
-      },
-      (err) => {
-        useCurrentLocationBtn.textContent = '📍 ใช้พิกัดปัจจุบันของฉัน';
-        alert('ไม่สามารถดึงพิกัดได้: ' + err.message);
-      },
-      { enableHighAccuracy: true }
-    );
-  });
-
-  function showConfigMessage(type, msg) {
-    configStatusMsg.style.display = 'block';
-    configStatusMsg.style.color = type === 'success' ? '#34d399' : '#fb7185';
-    configStatusMsg.textContent = msg;
-    setTimeout(() => {
-      configStatusMsg.style.display = 'none';
-    }, 4000);
-  }
-
   function escapeHtml(string) {
+    if (!string) return '';
     const div = document.createElement('div');
     div.textContent = string;
     return div.innerHTML;
